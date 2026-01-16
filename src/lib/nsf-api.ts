@@ -74,23 +74,7 @@ export async function getRandomGrant(
   minAmount?: number,
   status: "active" | "completed" = "completed"
 ): Promise<NSFAward | null> {
-  // If there's a minimum amount filter or status filter, use the offset method which supports filtering
-  if ((minAmount && minAmount > 0) || status === "active") {
-    return await getRandomGrantByOffset(minAmount, status);
-  }
-
-  const maxAttempts = 20;
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const randomId = generateRandomAwardId();
-    const award = await fetchAwardById(randomId);
-
-    if (award && award.abstractText && award.abstractText.length > 100) {
-      return award;
-    }
-  }
-
-  // Fallback: use offset-based random selection from a broad search
+  // Always use offset method for filtering
   return await getRandomGrantByOffset(minAmount, status);
 }
 
@@ -99,9 +83,13 @@ async function getRandomGrantByOffset(
   minAmount?: number,
   status: "active" | "completed" = "completed"
 ): Promise<NSFAward | null> {
+  // For "completed", we want grants with outcomes reports - may need multiple tries
+  const maxAttempts = status === "completed" ? 15 : 1;
+
   try {
     // Build the filter query
     const amountFilter = minAmount ? `&estimatedTotalAmtFrom=${minAmount}` : "";
+    // "completed" means has outcomes report, so we use ExpiredAwards (more likely to have reports)
     const statusFilter = status === "active" ? "&ActiveAwards=True" : "&ExpiredAwards=True";
 
     // First get total count from a broad search
@@ -119,24 +107,38 @@ async function getRandomGrantByOffset(
       return null;
     }
 
-    // Generate random offset using crypto
-    const randomBuffer = new Uint32Array(1);
-    crypto.getRandomValues(randomBuffer);
-    const randomValue = randomBuffer[0] / (0xffffffff + 1);
-    const randomOffset = Math.floor(randomValue * (totalCount - 1));
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      // Generate random offset using crypto
+      const randomBuffer = new Uint32Array(1);
+      crypto.getRandomValues(randomBuffer);
+      const randomValue = randomBuffer[0] / (0xffffffff + 1);
+      const randomOffset = Math.floor(randomValue * (totalCount - 1));
 
-    // Fetch the grant at that offset
-    const url = `${NSF_API_BASE}/awards.json?rpp=1&offset=${randomOffset}${amountFilter}${statusFilter}&printFields=${PRINT_FIELDS}`;
-    const response = await fetch(url, { next: { revalidate: 0 } });
+      // Fetch the grant at that offset
+      const url = `${NSF_API_BASE}/awards.json?rpp=1&offset=${randomOffset}${amountFilter}${statusFilter}&printFields=${PRINT_FIELDS}`;
+      const response = await fetch(url, { next: { revalidate: 0 } });
 
-    if (!response.ok) {
-      throw new Error("Failed to fetch grant");
-    }
+      if (!response.ok) {
+        continue;
+      }
 
-    const data: NSFApiResponse = await response.json();
+      const data: NSFApiResponse = await response.json();
 
-    if (data.response?.award?.length > 0) {
-      return data.response.award[0];
+      if (data.response?.award?.length > 0) {
+        const award = data.response.award[0];
+
+        // For "completed" status, require a project outcomes report
+        if (status === "completed") {
+          if (award.projectOutComesReport && award.projectOutComesReport.length > 50) {
+            return award;
+          }
+          // No outcomes report, try again
+          continue;
+        }
+
+        // For active awards, just return whatever we get
+        return award;
+      }
     }
 
     return null;

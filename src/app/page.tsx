@@ -265,7 +265,7 @@ const MIN_AMOUNT_OPTIONS = [
 ];
 
 const STATUS_OPTIONS = [
-  { value: "completed", label: "Completed" },
+  { value: "completed", label: "Has Outcomes" },
   { value: "active", label: "Active" },
 ];
 
