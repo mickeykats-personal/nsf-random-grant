@@ -264,6 +264,11 @@ const MIN_AMOUNT_OPTIONS = [
   { value: 600000, label: "$600K+" },
 ];
 
+const STATUS_OPTIONS = [
+  { value: "completed", label: "Completed" },
+  { value: "active", label: "Active" },
+];
+
 export default function Home() {
   const [grantData, setGrantData] = useState<GrantData | null>(null);
   const [publications, setPublications] = useState<PublicationWithAbstract[]>([]);
@@ -272,6 +277,7 @@ export default function Home() {
   const [outcomesSummary, setOutcomesSummary] = useState<string | null>(null);
   const [isLoadingOutcomesSummary, setIsLoadingOutcomesSummary] = useState(false);
   const [minAmount, setMinAmount] = useState(400000);
+  const [grantStatus, setGrantStatus] = useState<"active" | "completed">("completed");
 
   const fetchAbstractForPublication = useCallback(async (index: number, doi: string) => {
     setPublications(prev => {
@@ -361,7 +367,7 @@ export default function Home() {
     setPublications([]);
 
     try {
-      const response = await fetch(`/api/grant?minAmount=${minAmount}`);
+      const response = await fetch(`/api/grant?minAmount=${minAmount}&status=${grantStatus}`);
       if (!response.ok) {
         throw new Error("Failed to fetch grant");
       }
@@ -373,7 +379,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, [minAmount]);
+  }, [minAmount, grantStatus]);
 
   useEffect(() => {
     fetchRandomGrant();
@@ -400,6 +406,23 @@ export default function Home() {
               </p>
             </div>
             <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label htmlFor="grantStatus" className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                  Status:
+                </label>
+                <select
+                  id="grantStatus"
+                  value={grantStatus}
+                  onChange={(e) => setGrantStatus(e.target.value as "active" | "completed")}
+                  className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="flex items-center gap-2">
                 <label htmlFor="minAmount" className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
                   Min size:
