@@ -258,6 +258,12 @@ function PublicationCard({
   );
 }
 
+const MIN_AMOUNT_OPTIONS = [
+  { value: 100000, label: "$100K+" },
+  { value: 400000, label: "$400K+" },
+  { value: 600000, label: "$600K+" },
+];
+
 export default function Home() {
   const [grantData, setGrantData] = useState<GrantData | null>(null);
   const [publications, setPublications] = useState<PublicationWithAbstract[]>([]);
@@ -265,6 +271,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [outcomesSummary, setOutcomesSummary] = useState<string | null>(null);
   const [isLoadingOutcomesSummary, setIsLoadingOutcomesSummary] = useState(false);
+  const [minAmount, setMinAmount] = useState(400000);
 
   const fetchAbstractForPublication = useCallback(async (index: number, doi: string) => {
     setPublications(prev => {
@@ -354,7 +361,7 @@ export default function Home() {
     setPublications([]);
 
     try {
-      const response = await fetch("/api/grant");
+      const response = await fetch(`/api/grant?minAmount=${minAmount}`);
       if (!response.ok) {
         throw new Error("Failed to fetch grant");
       }
@@ -366,7 +373,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [minAmount]);
 
   useEffect(() => {
     fetchRandomGrant();
@@ -392,25 +399,44 @@ export default function Home() {
                 Discover what science is being funded
               </p>
             </div>
-            <button
-              onClick={fetchRandomGrant}
-              disabled={isLoading}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors shadow-md hover:shadow-lg disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                  Loading...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Random Grant
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label htmlFor="minAmount" className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                  Min size:
+                </label>
+                <select
+                  id="minAmount"
+                  value={minAmount}
+                  onChange={(e) => setMinAmount(parseInt(e.target.value, 10))}
+                  className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {MIN_AMOUNT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={fetchRandomGrant}
+                disabled={isLoading}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors shadow-md hover:shadow-lg disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Random Grant
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -558,7 +584,7 @@ export default function Home() {
             {/* AI Summary of Outcomes */}
             {(grantData.grant.projectOutComesReport || publications.length > 0) && (
               <SummarySection
-                title="AI Summary of Research Outcomes"
+                title="AI Summary: What Did Taxpayers Get?"
                 content={outcomesSummary}
                 isLoading={isLoadingOutcomesSummary}
                 onGenerate={handleGenerateOutcomesSummary}
