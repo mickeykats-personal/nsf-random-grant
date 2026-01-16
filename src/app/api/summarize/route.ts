@@ -31,7 +31,19 @@ Explain:
     } else if (type === "outcomes") {
       systemPrompt = `You are a science communicator who summarizes research outcomes for the general public.
 Be clear about what was actually accomplished and discovered. Be honest if outcomes seem limited.
-Keep responses concise - around 2-3 paragraphs.`;
+Keep responses concise - around 3-4 paragraphs.`;
+
+      // Format publications with their abstracts
+      const pubsText = publications && publications.length > 0
+        ? publications.map((p: { title: string; authors: string; journal: string; year: string; abstract?: string | null }, i: number) => {
+            let pubEntry = `${i + 1}. "${p.title}"`;
+            if (p.authors) pubEntry += `\n   Authors: ${p.authors}`;
+            if (p.journal) pubEntry += `\n   Journal: ${p.journal}`;
+            if (p.year) pubEntry += ` (${p.year})`;
+            if (p.abstract) pubEntry += `\n   Abstract: ${p.abstract}`;
+            return pubEntry;
+          }).join("\n\n")
+        : "No publications listed yet.";
 
       prompt = `Please summarize the outcomes and impact of this NSF research grant for an educated lay audience.
 
@@ -40,18 +52,13 @@ Keep responses concise - around 2-3 paragraphs.`;
 **Project Outcomes Report:**
 ${outcomes || "No outcomes report available yet."}
 
-**Publications from this grant:**
-${publications && publications.length > 0
-  ? publications.map((p: { title: string; authors: string; journal: string; year: string }) =>
-      `- "${p.title}" by ${p.authors} (${p.journal}, ${p.year})`
-    ).join("\n")
-  : "No publications listed yet."
-}
+**Publications from this grant (with abstracts where available):**
+${pubsText}
 
-Summarize:
-1. What did this research actually accomplish?
+Based on the project outcomes report and the publication abstracts above, please summarize:
+1. What did this research actually accomplish? What were the key findings?
 2. What new knowledge or discoveries came from it?
-3. What is the significance of the publications that resulted?`;
+3. What is the significance and potential impact of this work?`;
     }
 
     const message = await anthropic.messages.create({
