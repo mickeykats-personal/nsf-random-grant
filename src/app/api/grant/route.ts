@@ -6,7 +6,11 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     const minAmount = request.nextUrl.searchParams.get("minAmount");
-    const grant = await getRandomGrant(minAmount ? parseInt(minAmount, 10) : undefined);
+    const status = request.nextUrl.searchParams.get("status") || "completed";
+    const grant = await getRandomGrant(
+      minAmount ? parseInt(minAmount, 10) : undefined,
+      status as "active" | "completed"
+    );
 
     if (!grant) {
       return NextResponse.json(

@@ -70,10 +70,13 @@ async function fetchAwardById(id: string): Promise<NSFAward | null> {
 }
 
 // Get a truly random grant by trying random IDs
-export async function getRandomGrant(minAmount?: number): Promise<NSFAward | null> {
-  // If there's a minimum amount filter, use the offset method which supports filtering
-  if (minAmount && minAmount > 0) {
-    return await getRandomGrantByOffset(minAmount);
+export async function getRandomGrant(
+  minAmount?: number,
+  status: "active" | "completed" = "completed"
+): Promise<NSFAward | null> {
+  // If there's a minimum amount filter or status filter, use the offset method which supports filtering
+  if ((minAmount && minAmount > 0) || status === "active") {
+    return await getRandomGrantByOffset(minAmount, status);
   }
 
   const maxAttempts = 20;
@@ -88,17 +91,21 @@ export async function getRandomGrant(minAmount?: number): Promise<NSFAward | nul
   }
 
   // Fallback: use offset-based random selection from a broad search
-  return await getRandomGrantByOffset();
+  return await getRandomGrantByOffset(minAmount, status);
 }
 
 // Alternative method: get random grant using random offset
-async function getRandomGrantByOffset(minAmount?: number): Promise<NSFAward | null> {
+async function getRandomGrantByOffset(
+  minAmount?: number,
+  status: "active" | "completed" = "completed"
+): Promise<NSFAward | null> {
   try {
     // Build the filter query
     const amountFilter = minAmount ? `&estimatedTotalAmtFrom=${minAmount}` : "";
+    const statusFilter = status === "active" ? "&activeAwards=true" : "&expiredAwards=true";
 
     // First get total count from a broad search
-    const countUrl = `${NSF_API_BASE}/awards.json?rpp=1${amountFilter}`;
+    const countUrl = `${NSF_API_BASE}/awards.json?rpp=1${amountFilter}${statusFilter}`;
     const countResponse = await fetch(countUrl, { next: { revalidate: 0 } });
 
     if (!countResponse.ok) {
@@ -119,7 +126,7 @@ async function getRandomGrantByOffset(minAmount?: number): Promise<NSFAward | nu
     const randomOffset = Math.floor(randomValue * (totalCount - 1));
 
     // Fetch the grant at that offset
-    const url = `${NSF_API_BASE}/awards.json?rpp=1&offset=${randomOffset}${amountFilter}&printFields=${PRINT_FIELDS}`;
+    const url = `${NSF_API_BASE}/awards.json?rpp=1&offset=${randomOffset}${amountFilter}${statusFilter}&printFields=${PRINT_FIELDS}`;
     const response = await fetch(url, { next: { revalidate: 0 } });
 
     if (!response.ok) {
