@@ -102,7 +102,7 @@ async function getRandomGrantByOffset(
   try {
     // Build the filter query
     const amountFilter = minAmount ? `&estimatedTotalAmtFrom=${minAmount}` : "";
-    const statusFilter = status === "active" ? "&activeAwards=true" : "&expiredAwards=true";
+    const statusFilter = status === "active" ? "&ActiveAwards=True" : "&ExpiredAwards=True";
 
     // First get total count from a broad search
     const countUrl = `${NSF_API_BASE}/awards.json?rpp=1${amountFilter}${statusFilter}`;
