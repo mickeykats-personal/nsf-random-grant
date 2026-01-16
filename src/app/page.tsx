@@ -8,6 +8,20 @@ interface GrantData {
   publications: Publication[];
 }
 
+interface PaperMetadata {
+  title: string | null;
+  abstract: string | null;
+  authors: string | null;
+  journal: string | null;
+  year: number | null;
+  url: string | null;
+}
+
+interface PublicationWithAbstract extends Publication {
+  fetchedAbstract?: string | null;
+  isLoadingAbstract?: boolean;
+}
+
 function formatCurrency(amount: string): string {
   const num = parseInt(amount, 10);
   if (isNaN(num)) return amount;
@@ -84,7 +98,7 @@ function SummarySection({
             <span className="text-xl">🤖</span> {title}
           </h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Click to generate an AI-powered explanation
+            Click to generate an AI-powered summary of the research outcomes
           </p>
         </div>
         <button
@@ -101,14 +115,31 @@ function SummarySection({
   );
 }
 
-function PublicationCard({ pub, index }: { pub: Publication; index: number }) {
+function PublicationCard({
+  pub,
+  index,
+  onFetchAbstract,
+}: {
+  pub: PublicationWithAbstract;
+  index: number;
+  onFetchAbstract: () => void;
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  const handleExpand = () => {
+    const newExpanded = !isExpanded;
+    setIsExpanded(newExpanded);
+    // Fetch abstract when expanding if we have a DOI and haven't fetched yet
+    if (newExpanded && pub.doi && pub.fetchedAbstract === undefined) {
+      onFetchAbstract();
+    }
+  };
 
   return (
     <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
       <div
         className="p-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={handleExpand}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
@@ -169,7 +200,30 @@ function PublicationCard({ pub, index }: { pub: Publication; index: number }) {
 
       {isExpanded && (
         <div className="px-4 pb-4 pt-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50">
-          <div className="pt-3 space-y-2">
+          <div className="pt-3 space-y-3">
+            {/* Abstract Section */}
+            <div>
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Abstract</span>
+              {pub.isLoadingAbstract ? (
+                <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
+                  <span>Loading abstract...</span>
+                </div>
+              ) : pub.fetchedAbstract ? (
+                <p className="text-sm text-gray-700 dark:text-gray-300 mt-1 leading-relaxed">
+                  {pub.fetchedAbstract}
+                </p>
+              ) : pub.fetchedAbstract === null ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 italic">
+                  Abstract not available from CrossRef
+                </p>
+              ) : !pub.doi ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 italic">
+                  No DOI available to fetch abstract
+                </p>
+              ) : null}
+            </div>
+
             {pub.authors && (
               <div>
                 <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Authors</span>
@@ -204,38 +258,76 @@ function PublicationCard({ pub, index }: { pub: Publication; index: number }) {
   );
 }
 
+const MIN_AMOUNT_OPTIONS = [
+  { value: 100000, label: "$100K+" },
+  { value: 400000, label: "$400K+" },
+  { value: 600000, label: "$600K+" },
+];
+
 export default function Home() {
   const [grantData, setGrantData] = useState<GrantData | null>(null);
+  const [publications, setPublications] = useState<PublicationWithAbstract[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [grantSummary, setGrantSummary] = useState<string | null>(null);
   const [outcomesSummary, setOutcomesSummary] = useState<string | null>(null);
-  const [isLoadingGrantSummary, setIsLoadingGrantSummary] = useState(false);
   const [isLoadingOutcomesSummary, setIsLoadingOutcomesSummary] = useState(false);
+  const [minAmount, setMinAmount] = useState(400000);
 
-  const fetchGrantSummary = useCallback(async (grant: NSFAward) => {
-    setIsLoadingGrantSummary(true);
+  const fetchAbstractForPublication = useCallback(async (index: number, doi: string) => {
+    setPublications(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], isLoadingAbstract: true };
+      return updated;
+    });
+
     try {
-      const response = await fetch("/api/summarize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "grant",
-          title: grant.title,
-          abstract: grant.abstractText,
-        }),
+      const response = await fetch(`/api/paper?doi=${encodeURIComponent(doi)}`);
+      const data: PaperMetadata = await response.json();
+
+      setPublications(prev => {
+        const updated = [...prev];
+        updated[index] = {
+          ...updated[index],
+          fetchedAbstract: data.abstract,
+          isLoadingAbstract: false
+        };
+        return updated;
       });
-      const data = await response.json();
-      setGrantSummary(data.summary || null);
-    } catch (err) {
-      console.error("Failed to get grant summary:", err);
-    } finally {
-      setIsLoadingGrantSummary(false);
+    } catch {
+      setPublications(prev => {
+        const updated = [...prev];
+        updated[index] = {
+          ...updated[index],
+          fetchedAbstract: null,
+          isLoadingAbstract: false
+        };
+        return updated;
+      });
     }
   }, []);
 
-  const fetchOutcomesSummary = useCallback(async (grant: NSFAward, publications: Publication[]) => {
+  const fetchOutcomesSummary = useCallback(async (grant: NSFAward, pubs: PublicationWithAbstract[]) => {
     setIsLoadingOutcomesSummary(true);
+
+    // First, fetch all abstracts that we don't have yet
+    const pubsWithAbstracts = await Promise.all(
+      pubs.map(async (pub) => {
+        if (pub.fetchedAbstract !== undefined || !pub.doi) {
+          return pub;
+        }
+        try {
+          const response = await fetch(`/api/paper?doi=${encodeURIComponent(pub.doi)}`);
+          const data: PaperMetadata = await response.json();
+          return { ...pub, fetchedAbstract: data.abstract };
+        } catch {
+          return { ...pub, fetchedAbstract: null };
+        }
+      })
+    );
+
+    // Update state with fetched abstracts
+    setPublications(pubsWithAbstracts);
+
     try {
       const response = await fetch("/api/summarize", {
         method: "POST",
@@ -244,7 +336,13 @@ export default function Home() {
           type: "outcomes",
           title: grant.title,
           outcomes: grant.projectOutComesReport,
-          publications: publications,
+          publications: pubsWithAbstracts.map(p => ({
+            title: p.title,
+            authors: p.authors,
+            journal: p.journal,
+            year: p.year,
+            abstract: p.fetchedAbstract,
+          })),
         }),
       });
       const data = await response.json();
@@ -259,36 +357,31 @@ export default function Home() {
   const fetchRandomGrant = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    setGrantSummary(null);
     setOutcomesSummary(null);
+    setPublications([]);
 
     try {
-      const response = await fetch("/api/grant");
+      const response = await fetch(`/api/grant?minAmount=${minAmount}`);
       if (!response.ok) {
         throw new Error("Failed to fetch grant");
       }
       const data: GrantData = await response.json();
       setGrantData(data);
+      setPublications(data.publications.map(p => ({ ...p })));
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [minAmount]);
 
   useEffect(() => {
     fetchRandomGrant();
   }, [fetchRandomGrant]);
 
-  const handleGenerateGrantSummary = () => {
-    if (grantData) {
-      fetchGrantSummary(grantData.grant);
-    }
-  };
-
   const handleGenerateOutcomesSummary = () => {
     if (grantData) {
-      fetchOutcomesSummary(grantData.grant, grantData.publications);
+      fetchOutcomesSummary(grantData.grant, publications);
     }
   };
 
@@ -306,25 +399,44 @@ export default function Home() {
                 Discover what science is being funded
               </p>
             </div>
-            <button
-              onClick={fetchRandomGrant}
-              disabled={isLoading}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors shadow-md hover:shadow-lg disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                  Loading...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Random Grant
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label htmlFor="minAmount" className="text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                  Min size:
+                </label>
+                <select
+                  id="minAmount"
+                  value={minAmount}
+                  onChange={(e) => setMinAmount(parseInt(e.target.value, 10))}
+                  className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  {MIN_AMOUNT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={fetchRandomGrant}
+                disabled={isLoading}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors shadow-md hover:shadow-lg disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Random Grant
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -420,17 +532,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* AI Summary of Grant */}
-            <SummarySection
-              title="AI Explanation (Claude Sonnet)"
-              content={grantSummary}
-              isLoading={isLoadingGrantSummary}
-              onGenerate={handleGenerateGrantSummary}
-              hasContent={true}
-            />
-
             {/* Outcomes Section */}
-            {(grantData.grant.projectOutComesReport || grantData.publications.length > 0) && (
+            {(grantData.grant.projectOutComesReport || publications.length > 0) && (
               <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
                 <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4">
                   <h3 className="text-xl font-bold text-white">
@@ -454,14 +557,22 @@ export default function Home() {
                   )}
 
                   {/* Publications List */}
-                  {grantData.publications.length > 0 && (
+                  {publications.length > 0 && (
                     <div>
                       <h4 className="font-semibold text-gray-900 dark:text-white mb-3">
-                        Publications ({grantData.publications.length})
+                        Publications ({publications.length})
                       </h4>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                        Click on a publication to view its abstract
+                      </p>
                       <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                        {grantData.publications.map((pub, index) => (
-                          <PublicationCard key={index} pub={pub} index={index} />
+                        {publications.map((pub, index) => (
+                          <PublicationCard
+                            key={index}
+                            pub={pub}
+                            index={index}
+                            onFetchAbstract={() => pub.doi && fetchAbstractForPublication(index, pub.doi)}
+                          />
                         ))}
                       </div>
                     </div>
@@ -471,9 +582,9 @@ export default function Home() {
             )}
 
             {/* AI Summary of Outcomes */}
-            {(grantData.grant.projectOutComesReport || grantData.publications.length > 0) && (
+            {(grantData.grant.projectOutComesReport || publications.length > 0) && (
               <SummarySection
-                title="AI Summary of Research Outcomes"
+                title="AI Summary: What Did Taxpayers Get?"
                 content={outcomesSummary}
                 isLoading={isLoadingOutcomesSummary}
                 onGenerate={handleGenerateOutcomesSummary}
@@ -482,7 +593,7 @@ export default function Home() {
             )}
 
             {/* No outcomes message */}
-            {!grantData.grant.projectOutComesReport && grantData.publications.length === 0 && (
+            {!grantData.grant.projectOutComesReport && publications.length === 0 && (
               <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-6">
                 <h3 className="text-amber-800 dark:text-amber-200 font-semibold mb-2">
                   No Outcomes Available Yet
@@ -509,6 +620,15 @@ export default function Home() {
               className="text-blue-600 dark:text-blue-400 hover:underline"
             >
               NSF Award Search API
+            </a>
+            . Paper abstracts from{" "}
+            <a
+              href="https://www.crossref.org/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              CrossRef
             </a>
             . AI summaries powered by Claude Sonnet.
           </p>

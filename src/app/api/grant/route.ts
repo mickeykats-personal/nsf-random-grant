@@ -1,11 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getRandomGrant, parsePublications, stripHtml } from "@/lib/nsf-api";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const grant = await getRandomGrant();
+    const minAmount = request.nextUrl.searchParams.get("minAmount");
+    const grant = await getRandomGrant(minAmount ? parseInt(minAmount, 10) : undefined);
 
     if (!grant) {
       return NextResponse.json(
