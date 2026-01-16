@@ -127,72 +127,114 @@ async function getRandomGrantByOffset(): Promise<NSFAward | null> {
 }
 
 // Parse publication strings into structured data
+// NSF format varies but is typically one of:
+// "Year~Authors~DOI~Title~..." or "Journal~Year~Authors~Title~..."
 export function parsePublications(publicationStrings: string[]): Publication[] {
   return publicationStrings.map(pub => {
-    // Format: "Journal~Year~Volume~Authors~DOI~Title~..."
-    // or "Year~Authors~DOI~Title~..."
     const parts = pub.split("~");
 
-    // Try to extract meaningful parts
     let year = "";
     let authors = "";
     let title = "";
     let doi = "";
     let journal = "";
 
-    // Look for year (4 digits)
-    for (let i = 0; i < Math.min(parts.length, 3); i++) {
+    // Find DOI first (most reliable identifier)
+    let doiIndex = -1;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i].trim();
+      if (part.includes("doi.org") || part.match(/^10\.\d+\//)) {
+        doi = part.includes("http") ? part : `https://doi.org/${part}`;
+        doiIndex = i;
+        break;
+      }
+    }
+
+    // Find year (4 digits, typically in first 3 positions)
+    let yearIndex = -1;
+    for (let i = 0; i < Math.min(parts.length, 4); i++) {
       if (/^\d{4}$/.test(parts[i].trim())) {
         year = parts[i].trim();
+        yearIndex = i;
         break;
       }
     }
 
-    // Look for DOI
-    for (const part of parts) {
-      if (part.includes("doi.org") || part.startsWith("10.")) {
-        doi = part.includes("http") ? part : `https://doi.org/${part}`;
-        break;
-      }
-    }
+    // Determine format based on first part
+    const firstPart = parts[0]?.trim() || "";
+    const isYearFirst = /^\d{4}$/.test(firstPart);
 
-    // Find title (usually longer text without special chars at start)
-    for (const part of parts) {
-      if (
-        part.length > 30 &&
-        !part.includes("@") &&
-        !part.includes("doi.org") &&
-        !part.startsWith("10.") &&
-        !/^\d+$/.test(part.trim())
-      ) {
-        title = part.trim();
-        break;
+    if (isYearFirst) {
+      // Format: Year~Authors~DOI?~Title~...
+      year = firstPart;
+      if (parts[1]) {
+        authors = parts[1].trim();
       }
-    }
-
-    // Find authors (contains "and" or multiple names)
-    for (const part of parts) {
-      if (
-        (part.includes(" and ") || part.includes(",")) &&
-        !part.includes("doi") &&
-        part.length < 500 &&
-        part.length > 5
-      ) {
-        // Check if it looks like names
-        if (/[A-Z][a-z]+/.test(part)) {
-          authors = part.trim();
-          break;
+      // Title is after DOI if present, otherwise position 2 or 3
+      if (doiIndex >= 0 && parts[doiIndex + 1]) {
+        title = parts[doiIndex + 1].trim();
+      } else if (parts[3]) {
+        title = parts[3].trim();
+      } else if (parts[2] && !parts[2].includes("doi")) {
+        title = parts[2].trim();
+      }
+    } else {
+      // Format: Journal~Year~Authors?~Title~... or Journal~Year~Volume~Authors~DOI~Title
+      journal = firstPart;
+      if (yearIndex >= 0 && parts[yearIndex + 1]) {
+        // Check if next part after year looks like a volume number
+        const afterYear = parts[yearIndex + 1]?.trim() || "";
+        if (/^\d+$/.test(afterYear) && parts[yearIndex + 2]) {
+          // Has volume number
+          authors = parts[yearIndex + 2].trim();
+          // Find title - look for longer text that's not a number or DOI
+          for (let i = yearIndex + 3; i < parts.length; i++) {
+            const p = parts[i].trim();
+            if (p.length > 15 && !p.includes("doi.org") && !p.match(/^10\.\d+\//) && !/^\d+$/.test(p) && !p.includes("OSTI")) {
+              title = p;
+              break;
+            }
+          }
+        } else {
+          authors = afterYear;
+          // Title after authors
+          for (let i = yearIndex + 2; i < parts.length; i++) {
+            const p = parts[i].trim();
+            if (p.length > 15 && !p.includes("doi.org") && !p.match(/^10\.\d+\//) && !/^\d+$/.test(p) && !p.includes("OSTI")) {
+              title = p;
+              break;
+            }
+          }
         }
       }
     }
 
-    // Journal is often the first part
-    if (parts[0] && !parts[0].match(/^\d{4}$/) && parts[0].length > 3) {
-      journal = parts[0].trim();
+    // Clean up: if title looks like authors (has " and " but is short), swap
+    if (title && title.length < 80 && title.includes(" and ") && /^[A-Z][a-z]+/.test(title)) {
+      // Might have swapped - check if authors looks more like a title
+      if (authors && authors.length > 50 && !authors.includes(" and ")) {
+        [title, authors] = [authors, title];
+      }
+    }
+
+    // Filter out bad titles (IDs, dates, "OSTI", "N", single letters)
+    if (title && (
+      /^\d+$/.test(title) ||
+      title === "N" ||
+      title === "OSTI" ||
+      title.length < 10 ||
+      title.match(/^\d{4}-\d{2}-\d{2}/)
+    )) {
+      title = "";
+    }
+
+    // Clean authors - remove trailing email-like patterns
+    if (authors) {
+      authors = authors.replace(/\s+\S+@\S+/g, "").trim();
     }
 
     return { year, authors, title, doi, journal };
-  }).filter(pub => pub.title || pub.authors);
+  }).filter(pub => pub.title && pub.title.length > 10);
 }
 
 // Strip HTML tags from outcome report

@@ -30,39 +30,176 @@ function SummarySection({
   title,
   content,
   isLoading,
+  onGenerate,
+  hasContent,
 }: {
   title: string;
   content: string | null;
   isLoading: boolean;
+  onGenerate: () => void;
+  hasContent: boolean;
 }) {
+  if (!hasContent && !content && !isLoading) {
+    return null;
+  }
+
   if (isLoading) {
     return (
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl p-6 border border-blue-100 dark:border-blue-900">
         <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-4 flex items-center gap-2">
-          <span className="text-xl">&#129302;</span> {title}
+          <span className="text-xl">🤖</span> {title}
         </h3>
         <div className="flex items-center gap-3 text-blue-700 dark:text-blue-300">
           <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent"></div>
-          <span>Claude Opus 4.5 is analyzing...</span>
+          <span>Claude Sonnet is analyzing...</span>
         </div>
       </div>
     );
   }
 
-  if (!content) return null;
+  if (content) {
+    return (
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl p-6 border border-blue-100 dark:border-blue-900">
+        <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-4 flex items-center gap-2">
+          <span className="text-xl">🤖</span> {title}
+        </h3>
+        <div className="prose prose-blue dark:prose-invert max-w-none">
+          {content.split("\n").map((paragraph, i) => (
+            paragraph.trim() && (
+              <p key={i} className="text-gray-700 dark:text-gray-300 mb-3 last:mb-0">
+                {paragraph}
+              </p>
+            )
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl p-6 border border-blue-100 dark:border-blue-900">
-      <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-4 flex items-center gap-2">
-        <span className="text-xl">&#129302;</span> {title}
-      </h3>
-      <div className="prose prose-blue dark:prose-invert max-w-none">
-        {content.split("\n").map((paragraph, i) => (
-          <p key={i} className="text-gray-700 dark:text-gray-300 mb-3 last:mb-0">
-            {paragraph}
+    <div className="bg-gradient-to-r from-gray-50 to-slate-50 dark:from-gray-900/50 dark:to-slate-900/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700 border-dashed">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+            <span className="text-xl">🤖</span> {title}
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Click to generate an AI-powered explanation
           </p>
-        ))}
+        </div>
+        <button
+          onClick={onGenerate}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors shadow-md hover:shadow-lg flex items-center gap-2"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Generate Summary
+        </button>
       </div>
+    </div>
+  );
+}
+
+function PublicationCard({ pub, index }: { pub: Publication; index: number }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div
+        className="p-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded">
+                {index + 1}
+              </span>
+              {pub.year && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {pub.year}
+                </span>
+              )}
+              {pub.journal && (
+                <span className="text-xs text-blue-600 dark:text-blue-400 truncate max-w-[200px]">
+                  {pub.journal}
+                </span>
+              )}
+            </div>
+            <h5 className="font-medium text-gray-900 dark:text-white leading-snug">
+              {pub.title}
+            </h5>
+            {pub.authors && (
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-1">
+                {pub.authors}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {pub.doi && (
+              <a
+                href={pub.doi}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="p-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/50 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-lg transition-colors"
+                title="View Paper"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            )}
+            <button
+              className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+            >
+              <svg
+                className={`w-5 h-5 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="px-4 pb-4 pt-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50">
+          <div className="pt-3 space-y-2">
+            {pub.authors && (
+              <div>
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Authors</span>
+                <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{pub.authors}</p>
+              </div>
+            )}
+            {pub.journal && (
+              <div>
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Journal</span>
+                <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{pub.journal}</p>
+              </div>
+            )}
+            {pub.doi && (
+              <div>
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">DOI</span>
+                <p className="text-sm mt-0.5">
+                  <a
+                    href={pub.doi}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 dark:text-blue-400 hover:underline break-all"
+                  >
+                    {pub.doi}
+                  </a>
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -98,11 +235,6 @@ export default function Home() {
   }, []);
 
   const fetchOutcomesSummary = useCallback(async (grant: NSFAward, publications: Publication[]) => {
-    if (!grant.projectOutComesReport && publications.length === 0) {
-      setOutcomesSummary(null);
-      return;
-    }
-
     setIsLoadingOutcomesSummary(true);
     try {
       const response = await fetch("/api/summarize", {
@@ -137,20 +269,28 @@ export default function Home() {
       }
       const data: GrantData = await response.json();
       setGrantData(data);
-
-      // Fetch AI summaries in parallel
-      fetchGrantSummary(data.grant);
-      fetchOutcomesSummary(data.grant, data.publications);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setIsLoading(false);
     }
-  }, [fetchGrantSummary, fetchOutcomesSummary]);
+  }, []);
 
   useEffect(() => {
     fetchRandomGrant();
   }, [fetchRandomGrant]);
+
+  const handleGenerateGrantSummary = () => {
+    if (grantData) {
+      fetchGrantSummary(grantData.grant);
+    }
+  };
+
+  const handleGenerateOutcomesSummary = () => {
+    if (grantData) {
+      fetchOutcomesSummary(grantData.grant, grantData.publications);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
@@ -207,7 +347,7 @@ export default function Home() {
         {isLoading && !grantData && <LoadingSpinner />}
 
         {grantData && (
-          <div className="space-y-8">
+          <div className="space-y-6">
             {/* Grant Info Card */}
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 overflow-hidden">
               {/* Title Section */}
@@ -282,9 +422,11 @@ export default function Home() {
 
             {/* AI Summary of Grant */}
             <SummarySection
-              title="AI Explanation (Claude Opus 4.5)"
+              title="AI Explanation (Claude Sonnet)"
               content={grantSummary}
               isLoading={isLoadingGrantSummary}
+              onGenerate={handleGenerateGrantSummary}
+              hasContent={true}
             />
 
             {/* Outcomes Section */}
@@ -317,38 +459,9 @@ export default function Home() {
                       <h4 className="font-semibold text-gray-900 dark:text-white mb-3">
                         Publications ({grantData.publications.length})
                       </h4>
-                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                      <div className="space-y-3 max-h-[600px] overflow-y-auto">
                         {grantData.publications.map((pub, index) => (
-                          <div
-                            key={index}
-                            className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700"
-                          >
-                            {pub.title && (
-                              <h5 className="font-medium text-gray-900 dark:text-white mb-1">
-                                {pub.doi ? (
-                                  <a
-                                    href={pub.doi}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-600 dark:text-blue-400 hover:underline"
-                                  >
-                                    {pub.title}
-                                  </a>
-                                ) : (
-                                  pub.title
-                                )}
-                              </h5>
-                            )}
-                            {pub.authors && (
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                {pub.authors}
-                              </p>
-                            )}
-                            <div className="flex gap-3 mt-1 text-xs text-gray-500 dark:text-gray-500">
-                              {pub.journal && <span>{pub.journal}</span>}
-                              {pub.year && <span>{pub.year}</span>}
-                            </div>
-                          </div>
+                          <PublicationCard key={index} pub={pub} index={index} />
                         ))}
                       </div>
                     </div>
@@ -363,6 +476,8 @@ export default function Home() {
                 title="AI Summary of Research Outcomes"
                 content={outcomesSummary}
                 isLoading={isLoadingOutcomesSummary}
+                onGenerate={handleGenerateOutcomesSummary}
+                hasContent={true}
               />
             )}
 
@@ -395,7 +510,7 @@ export default function Home() {
             >
               NSF Award Search API
             </a>
-            . AI summaries powered by Claude Opus 4.5.
+            . AI summaries powered by Claude Sonnet.
           </p>
         </div>
       </footer>
